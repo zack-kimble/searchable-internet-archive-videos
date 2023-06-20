@@ -1,0 +1,9 @@
+name: photo_gallery
+channels:
+  - defaults
+dependencies:
+  - pip
+  - pip:
+     - ruamel.yaml
+     - internetarchive
+     - python-ffmpeg
