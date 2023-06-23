@@ -1,4 +1,4 @@
-name: photo_gallery
+name: searchable_public_meetings
 channels:
   - defaults
 dependencies:
@@ -7,3 +7,5 @@ dependencies:
      - ruamel.yaml
      - internetarchive
      - python-ffmpeg
+     - pytest
+     - faster-whisper

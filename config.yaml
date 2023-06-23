@@ -1,4 +1,4 @@
-meetings:
+meeting_video_series:
   - name: 'City Council'
     ia_search_query: 'creator:(Knoxville Community Media) AND subject:(City Council)'
   - name: 'County Commission'

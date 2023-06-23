@@ -1,14 +1,14 @@
-import yaml
+import ruamel.yaml as yaml
 
-from searchable_public_meetings import MeetingSeries, SearchableVideo, IAVideoFetcher, Transcriber
+from searchable_public_meetings import VideoSeries, SearchableVideo, IAVideoFetcher, Transcriber
 
 with open('config.yaml', 'r') as f:
     config = yaml.safe_load(f)
 
 meeting_series_list = []
 
-for meeting_config in config['meetings']:
-    meeting_series_list.append(MeetingSeries.from_config(meeting_config))
+for meeting_config in config['meeting_video_series']:
+    meeting_series_list.append(VideoSeries.from_config(meeting_config))
 
 fetcher = IAVideoFetcher(start_date=config['start_date'], preferred_formats=config['preferred_formats'])
 

@@ -1,0 +1,6 @@
+meeting_video_series:
+  - name: 'Test Video Series'
+    ia_search_query: 'identifier:(ertsgsdfgdsf) OR identifier:(walmartcommerical)'
+
+start_date: '1995-03-01' #  AND date:[2023-01-01 TO 2023-07-01]
+preferred_formats: ['h.264 ia', 'h.264']
