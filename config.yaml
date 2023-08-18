@@ -5,3 +5,5 @@ meeting_video_series:
     ia_search_query: 'creator:(Knoxville Community Media) AND subject:(Co Com)'
 start_date: '2023-03-01' #  AND date:[2023-01-01 TO 2023-07-01]
 preferred_formats: ['h.264 ia']
+model_size: 'large-v2'
+compute_type: 'int8' # Preferabbly run on GPU with FP16, but can't do that on this venerable GTX 1080

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from searchable_public_meetings import VideoSeries, SearchableVideo, IAVideoFetcher, Transcriber, video2audio
 import pytest
 import ruamel.yaml as yaml
@@ -50,3 +52,17 @@ def test_get_segments(test_video_series):
 
 def test_video2audio():
     video2audio('test_assets/Oprah Commerical - CTV.mp4', 'test_assets')
+
+
+def test_SearchableVideo_to_markdown(test_video_series):
+    test_video_series.update_identifiers()
+    test_video_series.videos['ertsgsdfgdsf'].to_markdown_file("test_ertsgsdfgdsf.md")
+    with open("test_ertsgsdfgdsf.md", 'r') as f:
+        contents = f.read()
+    assert contents # not sure how to test this. Maybe there's a md validator out there.
+
+def test_VideoSeries_write_all_videos_to_md(test_video_series):
+    test_video_series.update_identifiers()
+    test_video_series.write_all_videos_to_md("markdown")
+    assert Path(f"markdown/{test_video_series.name}/Walmart Commerical.md").exists()
+    assert Path(f"markdown/{test_video_series.name}//Oprah Commercial - CTV.md").exists()
