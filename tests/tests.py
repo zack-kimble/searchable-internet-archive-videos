@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 from searchable_public_meetings import VideoSeries, SearchableVideo, IAVideoFetcher, Transcriber, video2audio
@@ -5,6 +6,13 @@ import pytest
 import ruamel.yaml as yaml
 
 from faster_whisper import WhisperModel
+
+@pytest.fixture(scope="session", autouse=True)
+def clean_up_data_dir():
+    shutil.rmtree('data', ignore_errors=True)
+    yield
+    # forgoing cleanup
+    #shutil.rmtree('data', ignore_errors=True)
 
 @pytest.fixture
 def test_config():
@@ -51,18 +59,22 @@ def test_get_segments(test_video_series):
     assert segments[0].start == 0.0
 
 def test_video2audio():
+    Path('test_assets/Oprah Commerical - CTV.mp3').unlink(missing_ok=True)
     video2audio('test_assets/Oprah Commerical - CTV.mp4', 'test_assets')
+    assert Path('test_assets/Oprah Commerical - CTV.mp3').exists()
+    Path('test_assets/Oprah Commerical - CTV.mp3').unlink()
 
 
 def test_SearchableVideo_to_markdown(test_video_series):
+
     test_video_series.update_identifiers()
-    test_video_series.videos['ertsgsdfgdsf'].to_markdown_file("test_ertsgsdfgdsf.md")
-    with open("test_ertsgsdfgdsf.md", 'r') as f:
+    test_video_series.videos['ertsgsdfgdsf'].to_markdown_file("data/markdown/test_ertsgsdfgdsf.md")
+    with open("data/markdown/test_ertsgsdfgdsf.md", 'r') as f:
         contents = f.read()
     assert contents # not sure how to test this. Maybe there's a md validator out there.
 
 def test_VideoSeries_write_all_videos_to_md(test_video_series):
     test_video_series.update_identifiers()
-    test_video_series.write_all_videos_to_md("markdown")
-    assert Path(f"markdown/{test_video_series.name}/Walmart Commerical.md").exists()
-    assert Path(f"markdown/{test_video_series.name}//Oprah Commercial - CTV.md").exists()
+    test_video_series.write_all_videos_to_md()
+    assert Path(f"data/markdown/{test_video_series.name}/Walmart Commerical.md").exists()
+    assert Path(f"data/markdown/{test_video_series.name}/Oprah Commerical - CTV.md").exists()

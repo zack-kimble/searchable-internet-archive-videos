@@ -12,6 +12,8 @@ from pathlib import Path
 
 from tabulate import tabulate
 
+#TODO: rather than have "data" in the detault directory for audio, video, and markdown, have these come from config, probably through VideoSeries or whatever aggregates those if it gets made
+
 
 class TextSegment:
     def __init__(self, start, end, text, url_with_timestamp):
@@ -128,9 +130,13 @@ class SearchableVideo:
         md = ''.join([f"## [{self.title}]({self.url})\n",
                       f"### {self.date}\n",
                       segments_md])
-
-        with open(md_file_path, 'w') as md_file:
-            md_file.write(md)
+        try:
+            with open(md_file_path, 'w') as md_file:
+                md_file.write(md)
+        except FileNotFoundError as e:
+            Path(md_file_path).parent.mkdir(parents=True)
+            with open(md_file_path, 'w') as md_file:
+                md_file.write(md)
         return
 
 
@@ -160,16 +166,15 @@ class VideoSeries:
             if identifier not in self.videos:
                 self.videos[identifier] = SearchableVideo(identifier, self)
 
-    def write_all_videos_to_md(self, md_dir_path="markdown"):
-        md_dir_path = Path(md_dir_path).joinpath(self.name)
-        if not Path(md_dir_path).exists():
-            Path(md_dir_path).mkdir()
+    def write_all_videos_to_md(self, md_dir="data/markdown"):
+        md_dir = Path(md_dir).joinpath(self.name)
+        Path(md_dir).mkdir(parents=True, exist_ok=True)
         for video in self.videos.values():
-            video.to_markdown_file(Path(md_dir_path).joinpath(f"{video.title}.md"))
+            video.to_markdown_file(Path(md_dir).joinpath(f"{video.title}.md"))
 
 
 class IAVideoFetcher:
-    def __init__(self, preferred_formats=['h.264'], video_dir='videos', start_date=None):
+    def __init__(self, preferred_formats=['h.264'], video_dir='data/videos', start_date=None):
         # See if you can replace with access keys
         assert os.getenv('IA_USERNAME') and os.getenv(
             'IA_PASSWORD'), "IA_USERNAME and IA_PASSWORD environment variables must be set"
@@ -230,7 +235,7 @@ class Transcriber:
         return segments, info
 
 
-def video2audio(video_fp, audio_dir='audio'):
+def video2audio(video_fp, audio_dir='data/audio'):
     audio_fn = f'{Path(video_fp).stem}.mp3'
     if not Path(audio_dir).exists():
         Path(audio_dir).mkdir()
@@ -263,8 +268,8 @@ def main():
 
     fetcher = IAVideoFetcher(start_date=config['start_date'],
                              preferred_formats=config['preferred_formats'])
-
-    video_series = VideoSeries.from_config(config['meeting_video_series'][0],
-                                           fetcher, transcriber)
-    video_series.update_identifiers()
-    video_series.write_all_videos_to_md()
+    for video_series_config in config['meeting_video_series']:
+        video_series = VideoSeries.from_config(video_series_config,
+                                               fetcher, transcriber)
+        video_series.update_identifiers()
+        video_series.write_all_videos_to_md()
