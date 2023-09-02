@@ -2,6 +2,7 @@ name: searchable_public_meetings
 channels:
   - defaults
 dependencies:
+  - nvidia:cudnn
   - pip
   - pip:
      - ruamel.yaml
@@ -9,3 +10,4 @@ dependencies:
      - python-ffmpeg
      - pytest
      - faster-whisper
+     - tabulate

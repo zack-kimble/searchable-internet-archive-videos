@@ -6,8 +6,9 @@ import pytest
 import ruamel.yaml as yaml
 
 from faster_whisper import WhisperModel
+from unittest.mock import Mock
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture()
 def clean_up_data_dir():
     shutil.rmtree('data', ignore_errors=True)
     yield
@@ -37,9 +38,10 @@ def test_fetcher(test_config):
 
 
 @pytest.fixture
-def test_video_series(test_config, test_fetcher, test_transcriber):
-    test_video_series = VideoSeries.from_config(test_config['meeting_video_series'][0],
-                                                test_fetcher, test_transcriber)
+def test_video_series(test_config, test_fetcher, test_transcriber, clean_up_data_dir):
+    test_video_series = VideoSeries.from_config(config=test_config['meeting_video_series'][0],
+                                                video_fetcher=test_fetcher, transcriber=test_transcriber)
+    test_video_series.update_identifiers()
     return test_video_series
 
 # def test_update_identifiers(test_video_series):
@@ -53,7 +55,6 @@ def test_video_series(test_config, test_fetcher, test_transcriber):
 #     assert identifiers == ['ertsgsdfgdsf', 'walmartcommerical']
 
 def test_get_segments(test_video_series):
-    test_video_series.update_identifiers()
     segments = test_video_series.videos['ertsgsdfgdsf'].segments
     assert len(segments) == 3
     assert segments[0].start == 0.0
@@ -67,14 +68,40 @@ def test_video2audio():
 
 def test_SearchableVideo_to_markdown(test_video_series):
 
-    test_video_series.update_identifiers()
-    test_video_series.videos['ertsgsdfgdsf'].to_markdown_file("data/markdown/test_ertsgsdfgdsf.md")
-    with open("data/markdown/test_ertsgsdfgdsf.md", 'r') as f:
+    test_video_series.videos['ertsgsdfgdsf'].markdown_file
+    with open(f"data/markdown/{test_video_series.name}/Oprah Commerical - CTV.md", 'r') as f:
         contents = f.read()
     assert contents # not sure how to test this. Maybe there's a md validator out there.
 
-def test_VideoSeries_write_all_videos_to_md(test_video_series):
-    test_video_series.update_identifiers()
+def test_VideoSeries_write_all_videos_to_md(test_video_series, clean_up_data_dir):
     test_video_series.write_all_videos_to_md()
-    assert Path(f"data/markdown/{test_video_series.name}/Walmart Commerical.md").exists()
     assert Path(f"data/markdown/{test_video_series.name}/Oprah Commerical - CTV.md").exists()
+    assert Path(f"data/markdown/{test_video_series.name}/Walmart Commerical.md").exists()
+
+
+def test_md_attribute(test_video_series, clean_up_data_dir):
+    searchable_video = test_video_series.videos['ertsgsdfgdsf']
+    mock_write_markdown_file = Mock()
+    searchable_video.write_markdown_file = mock_write_markdown_file
+    Path(searchable_video._markdown_file).touch()
+    searchable_video.markdown_file
+    mock_write_markdown_file.assert_not_called()
+
+def test_audio_attribute(test_video_series,monkeypatch):
+    searchable_video = test_video_series.videos['ertsgsdfgdsf']
+    mock_video2audio = Mock()
+    monkeypatch.setattr('searchable_public_meetings.video2audio', mock_video2audio)
+    Path(searchable_video._audio_file).touch()
+    searchable_video.audio_file
+    mock_video2audio.assert_not_called()
+
+def test_video_attribute(test_video_series, monkeypatch):
+    searchable_video = test_video_series.videos['ertsgsdfgdsf']
+    mock_download_video_file = Mock()
+    test_video_series.video_fetcher.download_video_file = mock_download_video_file
+    Path(searchable_video._video_file).touch()
+    searchable_video.video_file
+    mock_download_video_file.assert_not_called()
+
+
+#TODO: add test for missing file types

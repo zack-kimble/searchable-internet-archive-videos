@@ -4,6 +4,7 @@
 #data/audio/*
 #data/markdown/*
 **/data/**
+*.sqlite
 
 
 # Byte-compiled / optimized / DLL files

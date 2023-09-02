@@ -36,16 +36,28 @@ class TextSegment:
 
 
 class SearchableVideo:
-    def __init__(self, identifier, video_series, url=None, title=None, date=None, video_file=None, audio_file=None):
+    def __init__(self, identifier, video_series): #, url=None, title=None, date=None, video_file=None, audio_file=None):
         self.identifier = identifier
         self.video_series = video_series
-        self._url = url
-        self._title = title
-        self._date = date
+        self._url = None
+        self._title = None
+        self._date = None
         self._full_text = None
         self._segments = None
-        self._video_file = video_file
-        self._audio_file = audio_file
+        self._video_file_name = None
+
+        self.file_identifier = self.__getattribute__(self.video_series.file_identifier)
+
+
+        video_suffix = Path(self.video_file_name).suffix
+        self._video_file = Path(self.video_series.video_dir).joinpath(self.file_identifier).with_suffix(video_suffix)
+        self._audio_file = Path(self.video_series.audio_dir).joinpath(f'{self.file_identifier}').with_suffix('.mp3')
+        self._markdown_file = Path(self.video_series.markdown_dir).joinpath(f'{self.file_identifier}').with_suffix('.md')
+
+    # def get_video_file_name(self):
+    #     self._video_file_name = self.video_series.video_fetcher.get_video_file_name(self.identifier)
+    #     self._video_file_path = Path(self.video_series.video_dir).joinpath(self._video_file_name)
+
 
     @classmethod
     def from_json(cls, json):
@@ -59,7 +71,8 @@ class SearchableVideo:
     @property
     def segments(self):
         if not self._segments:
-            logger.info(f"Transcribing {self.identifier}")
+            logger.info(f"Segments for {self.identifier} do not exist.")
+            logger.info(f"Transcribing {self.identifier} from {self.audio_file} to segments.")
             segments, info = self.video_series.transcriber.transcribe(self.audio_file)
             self._segments = [
                 TextSegment(segment.start, segment.end, segment.text, self.create_url_with_timestamp(segment.start))
@@ -75,23 +88,34 @@ class SearchableVideo:
 
     @property
     def audio_file(self):
-        if not (self._audio_file and Path(self._audio_file).exists()):
-            logger.info(f"Extracting {self.identifier} audio")
+        if not Path(self._audio_file).exists():
+            logger.info(f"Audio file {self._audio_file} does not exist.")
+            logger.info(f"Converting {self.video_file} to audio for {self.identifier}")
             self._audio_file = video2audio(self.video_file)
         return self._audio_file
 
     @property
     def video_file(self):
-        if not (self._video_file and Path(self._video_file).exists()):
-            logger.info(f"Downloading {self.identifier} video")
-            target_dir_path = Path(self.video_series.name).joinpath(self.identifier)
-            self._video_file = self.video_series.video_fetcher.get_video_file(
-                self.identifier, target_dir_path)
+        if not Path(self._video_file).exists():
+            logger.info(f"Video file {self._video_file} does not exist.")
+            logger.info(f"Downloading {self.identifier} video to {self._video_file}")
+            self._video_file = self.video_series.video_fetcher.download_video_file(
+                self.identifier, self._video_file_name, self._video_file)
         return self._video_file
 
     def _update_metadata(self):
         self._url, self._title, self._date = self.video_series.video_fetcher.get_video_metadata(
             self.identifier)
+    @property
+    def video_file_name(self):
+        if not self._video_file_name:
+            self._video_file_name = self.video_series.video_fetcher.get_video_file_name(self.identifier)
+            #TODO: this is a hack to handle videos that don't have a preferred format
+            if not self._video_file_name:
+                with open(self._markdown_file, 'w') as f:
+                    f.write(f"Video file not found for {self.identifier}")
+                self._video_file_name = f"None.mp4"
+        return self._video_file_name
 
     @property
     def url(self):
@@ -123,34 +147,55 @@ class SearchableVideo:
             'audio_file': self.audio_file
         }
 
-    def to_markdown_file(self, md_file_path):
+    @property
+    def markdown_file(self):
+        if not Path(self._markdown_file).exists():
+            logger.info(f"Markdown file {self._markdown_file} does not exist.")
+            _ = self._write_markdown_file()
+        return self._markdown_file
+
+    def _write_markdown_file(self):
+        logger.info(f"Writing {self.identifier} markdown to {self._markdown_file}")
         segments_list = [[x for x in segment.to_dict().values()] for segment in self.segments]
         segments_md = tabulate(segments_list, tablefmt='github', headers=[x for x in self.segments[0].to_dict().keys()])
 
         md = ''.join([f"## [{self.title}]({self.url})\n",
                       f"### {self.date}\n",
                       segments_md])
-        try:
-            with open(md_file_path, 'w') as md_file:
-                md_file.write(md)
-        except FileNotFoundError as e:
-            Path(md_file_path).parent.mkdir(parents=True)
-            with open(md_file_path, 'w') as md_file:
-                md_file.write(md)
-        return
+        with open(self._markdown_file, 'w') as md_file:
+            md_file.write(md)
+       # try:
+
+        # except FileNotFoundError as e:
+        #     Path(self.md_file_path).parent.mkdir(parents=True)
+        #     with open(self.md_file_path, 'w') as md_file:
+        #         md_file.write(md)
+        return self._markdown_file
 
 
 class VideoSeries:
-    def __init__(self, name, ia_seach_query, video_fetcher=None, transcriber=None):
+    def __init__(self, name, ia_seach_query, video_dir='video', audio_dir='audio',
+                 markdown_dir='markdown', data_dir='data', file_identifier='title',
+                 video_fetcher=None, transcriber=None):
         self.name = name
         self.ia_seach_query = ia_seach_query
         self.videos = {}
         self.video_fetcher = video_fetcher
         self.transcriber = transcriber
+        self.data_dir = data_dir
+        self.video_dir = Path(data_dir).joinpath(video_dir).joinpath(name)
+        self.audio_dir = Path(data_dir).joinpath(audio_dir).joinpath(name)
+        self.markdown_dir = Path(data_dir).joinpath(markdown_dir).joinpath(name)
+        self.file_identifier = file_identifier
+
+        Path(self.video_dir).mkdir(parents=True, exist_ok=True)
+        Path(self.audio_dir).mkdir(parents=True, exist_ok=True)
+        Path(self.markdown_dir).mkdir(parents=True, exist_ok=True)
 
     @classmethod
     def from_config(cls, config, video_fetcher=None, transcriber=None):
-        return cls(config['name'], config['ia_search_query'], video_fetcher, transcriber)
+        return cls(name=config['name'], ia_seach_query=config['ia_search_query'],
+                   video_fetcher=video_fetcher, transcriber=transcriber)
 
     @classmethod
     def from_json(cls, json, video_fetcher=None, transcriber=None):
@@ -166,22 +211,19 @@ class VideoSeries:
             if identifier not in self.videos:
                 self.videos[identifier] = SearchableVideo(identifier, self)
 
-    def write_all_videos_to_md(self, md_dir="data/markdown"):
-        md_dir = Path(md_dir).joinpath(self.name)
-        Path(md_dir).mkdir(parents=True, exist_ok=True)
+    def write_all_videos_to_md(self):
         for video in self.videos.values():
-            video.to_markdown_file(Path(md_dir).joinpath(f"{video.title}.md"))
+            video.markdown_file
 
 
 class IAVideoFetcher:
-    def __init__(self, preferred_formats=['h.264'], video_dir='data/videos', start_date=None):
+    def __init__(self, preferred_formats=['h.264'], start_date=None):
         # See if you can replace with access keys
         assert os.getenv('IA_USERNAME') and os.getenv(
             'IA_PASSWORD'), "IA_USERNAME and IA_PASSWORD environment variables must be set"
         configure(username=os.getenv('IA_USERNAME'), password=os.getenv('IA_PASSWORD'))
         self.session = get_session()
         self.preferred_formats = preferred_formats
-        self.video_dir = video_dir
         if start_date:
             self.start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
         else:
@@ -200,18 +242,22 @@ class IAVideoFetcher:
     def add_date_to_query(self, query):
         return f'({query}) AND date:[{self.start_date} TO {self.end_date}]'
 
-    def get_video_file(self, identifier, target_dir):
+    def get_video_file_name(self, identifier):
         item = get_item(identifier)
         for file in item.files:
             # TODO: find smallest video file
             if file['format'].lower() in self.preferred_formats:
-                video_fp = f'{self.video_dir}/{target_dir}/{file["name"]}'
-                logger.info(f'Downloading {identifier}')
-                file_obj = File(item, file['name'])
-                file_obj.download(file_path=video_fp)
-                return video_fp
-        logger.warning(f'No preferred format found for {identifier}')
+                return file['name']
+        logger.warning(f'No video in preferred format found for {identifier}')
         return
+
+    def download_video_file(self, identifier, file_name, target_filepath):
+        item = get_item(identifier)
+        logger.info(f'Downloading {identifier}:{file_name}')
+        file_obj = File(item, file_name)
+        file_obj.download(file_path=str(target_filepath))
+        return target_filepath
+
 
     def get_video_metadata(self, identifier):
         item = get_item(identifier)
@@ -250,12 +296,21 @@ def video2audio(video_fp, audio_dir='data/audio'):
     return audio_fp
 
 
-def main():
+if __name__ == '__main__':
     # updates identifiers for each video series in config and then writes them to markdown. Any missing videos
     # are downloaded and transcribed.
 
     from faster_whisper import WhisperModel
     import ruamel.yaml as yaml
+    import logging
+    import requests_cache
+
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+    logger.addHandler(logging.StreamHandler())
+    logger.addHandler(logging.FileHandler('searchable_public_meetings.log'))
+
+    requests_cache.install_cache('ia_cache', backend='sqlite', expire_after=60*60)
 
     config = yaml.safe_load(open('config.yaml'))
 
@@ -269,7 +324,8 @@ def main():
     fetcher = IAVideoFetcher(start_date=config['start_date'],
                              preferred_formats=config['preferred_formats'])
     for video_series_config in config['meeting_video_series']:
-        video_series = VideoSeries.from_config(video_series_config,
-                                               fetcher, transcriber)
+        video_series = VideoSeries.from_config(config=video_series_config,
+                                               video_fetcher=fetcher, transcriber=transcriber)
         video_series.update_identifiers()
         video_series.write_all_videos_to_md()
+
