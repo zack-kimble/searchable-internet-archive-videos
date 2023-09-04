@@ -1,3 +1,4 @@
+import json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -12,7 +13,6 @@ from pathlib import Path
 
 from tabulate import tabulate
 
-#TODO: rather than have "data" in the detault directory for audio, video, and markdown, have these come from config, probably through VideoSeries or whatever aggregates those if it gets made
 
 
 class TextSegment:
@@ -23,8 +23,20 @@ class TextSegment:
         self.url_with_timestamp = url_with_timestamp
 
     @classmethod
-    def from_json(cls, json):
-        return cls(json['start'], json['end'], json['text'], json['url_with_timestamp'])
+    def from_json(cls, fp):
+        segment_dict = json.load(fp)
+        return cls.from_dict(segment_dict)
+
+    @classmethod
+    def from_dict(cls, segment_dict):
+        segment = cls(
+            start=segment_dict['start'],
+            end=segment_dict['end'],
+            text=segment_dict['text'],
+            url_with_timestamp=segment_dict['url_with_time']
+            )
+        return segment
+
 
     def to_dict(self):
         return {
@@ -33,6 +45,9 @@ class TextSegment:
             'text': self.text,
             'url_with_time': self.url_with_timestamp
         }
+
+    def to_json(self, fp):
+        json.dump(self.to_dict(), fp)
 
 
 class SearchableVideo:
@@ -43,16 +58,17 @@ class SearchableVideo:
         self._title = None
         self._date = None
         self._full_text = None
-        self._segments = None
+        self._segment_file = None
         self._video_file_name = None
 
         self.file_identifier = self.__getattribute__(self.video_series.file_identifier)
 
 
         video_suffix = Path(self.video_file_name).suffix
-        self._video_file = Path(self.video_series.video_dir).joinpath(self.file_identifier).with_suffix(video_suffix)
-        self._audio_file = Path(self.video_series.audio_dir).joinpath(f'{self.file_identifier}').with_suffix('.mp3')
-        self._markdown_file = Path(self.video_series.markdown_dir).joinpath(f'{self.file_identifier}').with_suffix('.md')
+        self._video_file = str(Path(self.video_series.video_dir).joinpath(self.file_identifier).with_suffix(video_suffix))
+        self._audio_file = str(Path(self.video_series.audio_dir).joinpath(f'{self.file_identifier}').with_suffix('.mp3'))
+        self._markdown_file = str(Path(self.video_series.markdown_dir).joinpath(f'{self.file_identifier}').with_suffix('.md'))
+        self._segment_file = str(Path(self.video_series.segment_dir).joinpath(f'{self.file_identifier}').with_suffix('.json'))
 
     # def get_video_file_name(self):
     #     self._video_file_name = self.video_series.video_fetcher.get_video_file_name(self.identifier)
@@ -69,15 +85,18 @@ class SearchableVideo:
         return video
 
     @property
-    def segments(self):
-        if not self._segments:
+    def segment_file(self):
+        if not Path(self._segment_file).exists():
             logger.info(f"Segments for {self.identifier} do not exist.")
             logger.info(f"Transcribing {self.identifier} from {self.audio_file} to segments.")
             segments, info = self.video_series.transcriber.transcribe(self.audio_file)
-            self._segments = [
+            text_segments = [
                 TextSegment(segment.start, segment.end, segment.text, self.create_url_with_timestamp(segment.start))
                 for segment in segments]
-        return self._segments
+            with open(self._segment_file, 'w') as fp:
+                json.dump([segment.to_dict() for segment in text_segments], fp)
+
+        return self._segment_file
 
     def create_url_with_timestamp(self, timestamp):
         return f"{self.url}?start={timestamp}"
@@ -91,7 +110,7 @@ class SearchableVideo:
         if not Path(self._audio_file).exists():
             logger.info(f"Audio file {self._audio_file} does not exist.")
             logger.info(f"Converting {self.video_file} to audio for {self.identifier}")
-            self._audio_file = video2audio(self.video_file)
+            self._audio_file = video2audio(self.video_file, self._audio_file)
         return self._audio_file
 
     @property
@@ -156,8 +175,10 @@ class SearchableVideo:
 
     def _write_markdown_file(self):
         logger.info(f"Writing {self.identifier} markdown to {self._markdown_file}")
-        segments_list = [[x for x in segment.to_dict().values()] for segment in self.segments]
-        segments_md = tabulate(segments_list, tablefmt='github', headers=[x for x in self.segments[0].to_dict().keys()])
+        with open(self.segment_file, 'r') as fp:
+            segments_list = json.load(fp)
+        values_list = [[x for x in segment.values()] for segment in segments_list]
+        segments_md = tabulate(values_list, tablefmt='github', headers=[x for x in segments_list[0].keys()])
 
         md = ''.join([f"## [{self.title}]({self.url})\n",
                       f"### {self.date}\n",
@@ -175,7 +196,8 @@ class SearchableVideo:
 
 class VideoSeries:
     def __init__(self, name, ia_seach_query, video_dir='video', audio_dir='audio',
-                 markdown_dir='markdown', data_dir='data', file_identifier='title',
+                 segment_dir='segment', markdown_dir='markdown', data_dir='data',
+                 file_identifier='title',
                  video_fetcher=None, transcriber=None):
         self.name = name
         self.ia_seach_query = ia_seach_query
@@ -185,11 +207,13 @@ class VideoSeries:
         self.data_dir = data_dir
         self.video_dir = Path(data_dir).joinpath(video_dir).joinpath(name)
         self.audio_dir = Path(data_dir).joinpath(audio_dir).joinpath(name)
+        self.segment_dir = Path(data_dir).joinpath(segment_dir).joinpath(name)
         self.markdown_dir = Path(data_dir).joinpath(markdown_dir).joinpath(name)
         self.file_identifier = file_identifier
 
         Path(self.video_dir).mkdir(parents=True, exist_ok=True)
         Path(self.audio_dir).mkdir(parents=True, exist_ok=True)
+        Path(self.segment_dir).mkdir(parents=True, exist_ok=True)
         Path(self.markdown_dir).mkdir(parents=True, exist_ok=True)
 
     @classmethod
@@ -281,11 +305,11 @@ class Transcriber:
         return segments, info
 
 
-def video2audio(video_fp, audio_dir='data/audio'):
-    audio_fn = f'{Path(video_fp).stem}.mp3'
-    if not Path(audio_dir).exists():
-        Path(audio_dir).mkdir()
-    audio_fp = f'{audio_dir}/{audio_fn}'
+def video2audio(video_fp, audio_fp):
+    # audio_fn = f'{Path(video_fp).stem}.mp3'
+    # if not Path(audio_dir).exists():
+    #     Path(audio_dir).mkdir()
+    # audio_fp = f'{audio_dir}/{audio_fn}'
     ffmpeg = (
         FFmpeg()
         .option("vn")

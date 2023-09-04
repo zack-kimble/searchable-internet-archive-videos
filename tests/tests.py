@@ -1,3 +1,4 @@
+import json
 import shutil
 from pathlib import Path
 
@@ -7,6 +8,9 @@ import ruamel.yaml as yaml
 
 from faster_whisper import WhisperModel
 from unittest.mock import Mock
+import requests_cache
+
+requests_cache.install_cache('ia_test_cache', backend='sqlite', expire_after=60 * 60)
 
 @pytest.fixture()
 def clean_up_data_dir():
@@ -55,13 +59,16 @@ def test_video_series(test_config, test_fetcher, test_transcriber, clean_up_data
 #     assert identifiers == ['ertsgsdfgdsf', 'walmartcommerical']
 
 def test_get_segments(test_video_series):
-    segments = test_video_series.videos['ertsgsdfgdsf'].segments
+    segment_file = test_video_series.videos['ertsgsdfgdsf'].segment_file
+    with open(segment_file, 'r') as f:
+        segments = json.load(f)
+
     assert len(segments) == 3
-    assert segments[0].start == 0.0
+    assert segments[0]['start'] == 0.0
 
 def test_video2audio():
     Path('test_assets/Oprah Commerical - CTV.mp3').unlink(missing_ok=True)
-    video2audio('test_assets/Oprah Commerical - CTV.mp4', 'test_assets')
+    video2audio('test_assets/Oprah Commerical - CTV.mp4', 'test_assets/Oprah Commerical - CTV.mp3')
     assert Path('test_assets/Oprah Commerical - CTV.mp3').exists()
     Path('test_assets/Oprah Commerical - CTV.mp3').unlink()
 
