@@ -6,4 +6,4 @@ meeting_video_series:
 start_date: '2023-03-01' #  AND date:[2023-01-01 TO 2023-07-01]
 preferred_formats: ['h.264 ia']
 model_size: 'large-v2'
-compute_type: 'float16' # Preferabbly run on GPU with FP16, but can't do that on this venerable GTX 1080
+compute_type: 'float16' # Preferably run on GPU with FP16, but can't do that on this venerable GTX 1080.
