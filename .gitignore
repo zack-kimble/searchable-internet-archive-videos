@@ -5,7 +5,7 @@
 #data/markdown/*
 **/data/**
 *.sqlite
-
+.vscode
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

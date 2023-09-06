@@ -177,6 +177,9 @@ class SearchableVideo:
         logger.info(f"Writing {self.identifier} markdown to {self._markdown_file}")
         with open(self.segment_file, 'r') as fp:
             segments_list = json.load(fp)
+        for segment in segments_list:
+            segment['video_link'] = f"[source video]({segment['url_with_time']})"
+            del segment['url_with_time']
         values_list = [[x for x in segment.values()] for segment in segments_list]
         segments_md = tabulate(values_list, tablefmt='github', headers=[x for x in segments_list[0].keys()])
 
