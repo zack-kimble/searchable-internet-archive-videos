@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +14,20 @@ from pathlib import Path
 
 from tabulate import tabulate
 
+from more_itertools import chunked
+
+
+def chunk_write_md_file(md_path, i, header: str, body_lines: list, max_bytes=345 * 1000):
+    bytes_written = 0
+    with open(md_path.with_stem(f"{md_path.stem}_{i}"), 'wb') as f:
+        bytes_written += f.write(header.encode('utf-8'))
+        for l, line in enumerate(body_lines):
+            line = line+'\n'
+            bytes_written += f.write(line.encode('utf-8'))
+            if bytes_written >= max_bytes:
+                break
+    if l < len(body_lines) - 1:
+        chunk_write_md_file(md_path, i + 1, header, body_lines[l+1:], max_bytes)
 
 
 class TextSegment:
@@ -65,6 +80,7 @@ class SearchableVideo:
 
 
         video_suffix = Path(self.video_file_name).suffix
+        #have to convert paths back to strings because av doesn't handle Path objects
         self._video_file = str(Path(self.video_series.video_dir).joinpath(self.file_identifier).with_suffix(video_suffix))
         self._audio_file = str(Path(self.video_series.audio_dir).joinpath(f'{self.file_identifier}').with_suffix('.mp3'))
         self._markdown_file = str(Path(self.video_series.markdown_dir).joinpath(f'{self.file_identifier}').with_suffix('.md'))
@@ -91,7 +107,7 @@ class SearchableVideo:
             logger.info(f"Transcribing {self.identifier} from {self.audio_file} to segments.")
             segments, info = self.video_series.transcriber.transcribe(self.audio_file)
             text_segments = [
-                TextSegment(segment.start, segment.end, segment.text, self.create_url_with_timestamp(segment.start))
+                TextSegment(int(segment.start), segment.end, segment.text, self.create_url_with_timestamp(int(segment.start)))
                 for segment in segments]
             with open(self._segment_file, 'w') as fp:
                 json.dump([segment.to_dict() for segment in text_segments], fp)
@@ -168,26 +184,55 @@ class SearchableVideo:
 
     @property
     def markdown_file(self):
+        #TODO: add a glob to check for split md files
         if not Path(self._markdown_file).exists():
             logger.info(f"Markdown file {self._markdown_file} does not exist.")
             _ = self._write_markdown_file()
         return self._markdown_file
 
+    @staticmethod
+    def prettify_segment(segment:dict):
+        #TODO: Clean this and _write_markdown_file up. Shouldn't have headers defined in two spots and ordering should be explicit
+        pretty_segment = {}
+        pretty_segment['Time'] = str(timedelta(seconds=int(segment['start'])))
+        pretty_segment['Transcript'] = segment['text']
+        pretty_segment['Video'] = f"[source video]({segment['url_with_time']})"
+        return (pretty_segment.values())
+
+    @staticmethod
+    def remove_md_table_whitespace(md):
+        return re.sub(' *(?=\|)', '', md)
+
+
+
     def _write_markdown_file(self):
         logger.info(f"Writing {self.identifier} markdown to {self._markdown_file}")
         with open(self.segment_file, 'r') as fp:
             segments_list = json.load(fp)
-        for segment in segments_list:
-            segment['video_link'] = f"[source video]({segment['url_with_time']})"
-            del segment['url_with_time']
-        values_list = [[x for x in segment.values()] for segment in segments_list]
-        segments_md = tabulate(values_list, tablefmt='github', headers=[x for x in segments_list[0].keys()])
-
+        # only write 1300 segments at a time so that github can still index for search
+        md_path = Path(self._markdown_file)
+        values_list = [self.prettify_segment(segment) for segment in segments_list]
+        segments_md = tabulate(values_list, tablefmt='github', headers=['Time', 'Transcript', 'Video'])
         md = ''.join([f"## [{self.title}]({self.url})\n",
                       f"### {self.date}\n",
                       segments_md])
-        with open(self._markdown_file, 'w') as md_file:
-            md_file.write(md)
+        md = self.remove_md_table_whitespace(md)
+        md_lines = md.splitlines()
+        md_header = '\n'.join(md_lines[0:4])+ '\n'
+        md_body_lines = md_lines[4:]
+        chunk_write_md_file(md_path, 0, md_header, md_body_lines)
+
+        #
+        # for i, chunk in enumerate(chunked(segments_list, n=2000)):
+        #     values_list = [self.prettify_segment(segment) for segment in chunk]
+        #     segments_md = tabulate(values_list, tablefmt='github', headers=['Time', 'Transcript', 'Video'])
+        #
+        #     md = ''.join([f"## [{self.title}]({self.url})\n",
+        #                   f"### {self.date}\n",
+        #                   segments_md])
+        #     md = self.remove_md_table_whitespace(md)
+        #     with open(md_path.with_stem(f'{md_path.stem}_{i}'), 'w') as md_file:
+        #         md_file.write(md)
        # try:
 
         # except FileNotFoundError as e:

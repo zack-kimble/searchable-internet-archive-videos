@@ -76,14 +76,14 @@ def test_video2audio():
 def test_SearchableVideo_to_markdown(test_video_series):
 
     test_video_series.videos['ertsgsdfgdsf'].markdown_file
-    with open(f"data/markdown/{test_video_series.name}/Oprah Commerical - CTV.md", 'r') as f:
+    with open(f"data/markdown/{test_video_series.name}/Oprah Commerical - CTV_0.md", 'r') as f:
         contents = f.read()
     assert contents # not sure how to test this. Maybe there's a md validator out there.
 
 def test_VideoSeries_write_all_videos_to_md(test_video_series, clean_up_data_dir):
     test_video_series.write_all_videos_to_md()
-    assert Path(f"data/markdown/{test_video_series.name}/Oprah Commerical - CTV.md").exists()
-    assert Path(f"data/markdown/{test_video_series.name}/Walmart Commerical.md").exists()
+    assert Path(f"data/markdown/{test_video_series.name}/Oprah Commerical - CTV_0.md").exists()
+    assert Path(f"data/markdown/{test_video_series.name}/Walmart Commerical_0.md").exists()
 
 
 def test_md_attribute(test_video_series, clean_up_data_dir):
