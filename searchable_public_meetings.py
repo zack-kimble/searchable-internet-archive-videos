@@ -1,6 +1,8 @@
+import glob
 import json
 import logging
 import re
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -78,13 +80,13 @@ class SearchableVideo:
 
         self.file_identifier = self.__getattribute__(self.video_series.file_identifier)
 
+        self._audio_file = str(Path(self.video_series.audio_dir).joinpath(f'{self.file_identifier}').with_suffix('.mp3'))
+        self._markdown_file = str(Path(self.video_series.markdown_dir).joinpath(f'{self.file_identifier}').with_suffix('.md'))
+        self._segment_file = str(Path(self.video_series.segment_dir).joinpath(f'{self.file_identifier}').with_suffix('.json'))
 
         video_suffix = Path(self.video_file_name).suffix
         #have to convert paths back to strings because av doesn't handle Path objects
         self._video_file = str(Path(self.video_series.video_dir).joinpath(self.file_identifier).with_suffix(video_suffix))
-        self._audio_file = str(Path(self.video_series.audio_dir).joinpath(f'{self.file_identifier}').with_suffix('.mp3'))
-        self._markdown_file = str(Path(self.video_series.markdown_dir).joinpath(f'{self.file_identifier}').with_suffix('.md'))
-        self._segment_file = str(Path(self.video_series.segment_dir).joinpath(f'{self.file_identifier}').with_suffix('.json'))
 
     # def get_video_file_name(self):
     #     self._video_file_name = self.video_series.video_fetcher.get_video_file_name(self.identifier)
@@ -184,8 +186,10 @@ class SearchableVideo:
 
     @property
     def markdown_file(self):
-        #TODO: add a glob to check for split md files
-        if not Path(self._markdown_file).exists():
+        #TODO: gotta be a cleaner way to do this.
+        glob_pattern = str(Path(self._markdown_file).parent)+'/'+str(Path(self._markdown_file).stem)+'*.md'
+        chunked_files_found = glob.glob(glob_pattern)
+        if not chunked_files_found:
             logger.info(f"Markdown file {self._markdown_file} does not exist.")
             _ = self._write_markdown_file()
         return self._markdown_file
@@ -385,7 +389,7 @@ if __name__ == '__main__':
     requests_cache.install_cache('ia_cache', backend='sqlite', expire_after=60*60)
 
     config = yaml.safe_load(open('config.yaml'))
-
+    logger.info('loading Whisper model')
     model = WhisperModel(config['model_size'],
                          device="cuda",
                          compute_type=config['compute_type']
@@ -398,6 +402,9 @@ if __name__ == '__main__':
     for video_series_config in config['meeting_video_series']:
         video_series = VideoSeries.from_config(config=video_series_config,
                                                video_fetcher=fetcher, transcriber=transcriber)
+        logger.info(f'Updating {video_series.name} indentifiers')
         video_series.update_identifiers()
+        logger.info(f'Writing {video_series.name} to markdown')
         video_series.write_all_videos_to_md()
 
+    time.sleep(15)
