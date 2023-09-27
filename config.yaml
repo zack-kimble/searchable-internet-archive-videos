@@ -5,6 +5,10 @@ meeting_video_series:
     ia_search_query: 'creator:(Knoxville Community Media) AND subject:(Co Com)'
   - name: 'School Board'
     ia_search_query: 'creator:(Knoxville Community Media) AND subject:(School Board)'
+  - name: 'Beer Board'
+    ia_search_query: 'creator:(Knoxville Community Media) AND subject:(Beer)'
+  - name: 'Planning Commission'
+    ia_search_query: 'creator:(Knoxville Community Media) AND subject:(Planning)'
 start_date: '2022-08-01' #  AND date:[2023-01-01 TO 2023-07-01]
 preferred_formats: ['h.264 ia']
 model_size: 'large-v2'

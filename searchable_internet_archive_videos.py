@@ -384,7 +384,7 @@ if __name__ == '__main__':
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
     logger.addHandler(logging.StreamHandler())
-    logger.addHandler(logging.FileHandler('searchable_public_meetings.log'))
+    logger.addHandler(logging.FileHandler('searchable_internet_archive_videos.log'))
 
     requests_cache.install_cache('ia_cache', backend='sqlite', expire_after=60*60)
 

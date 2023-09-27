@@ -1,4 +1,4 @@
-name: searchable_public_meetings
+name: searchable_internet_archive_videos
 channels:
   - defaults
 dependencies:

@@ -2,7 +2,7 @@ import json
 import shutil
 from pathlib import Path
 
-from searchable_public_meetings import VideoSeries, SearchableVideo, IAVideoFetcher, Transcriber, video2audio
+from searchable_internet_archive_videos import VideoSeries, SearchableVideo, IAVideoFetcher, Transcriber, video2audio
 import pytest
 import ruamel.yaml as yaml
 
@@ -97,7 +97,7 @@ def test_md_attribute(test_video_series, clean_up_data_dir):
 def test_audio_attribute(test_video_series,monkeypatch):
     searchable_video = test_video_series.videos['ertsgsdfgdsf']
     mock_video2audio = Mock()
-    monkeypatch.setattr('searchable_public_meetings.video2audio', mock_video2audio)
+    monkeypatch.setattr('searchable_internet_archive_videos.video2audio', mock_video2audio)
     Path(searchable_video._audio_file).touch()
     searchable_video.audio_file
     mock_video2audio.assert_not_called()
